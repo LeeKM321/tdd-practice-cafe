@@ -101,8 +101,106 @@ public class OrderServiceTest {
 
         }
 
+        @Test
+        @DisplayName("성공: 여러 메뉴를 주문할 수 있다.")
+        void createOrder_WithMultipleMenus_Success() {
+            // given
+            when(menuRepository.findById(1L))
+                    .thenReturn(Optional.of(americano));
+            when(menuRepository.findById(2L))
+                    .thenReturn(Optional.of(latte));
 
+            // orderRepository가 주문을 save하면 save한 내용 그대로 반환하는 설정
+            when(orderRepository.save(any(Order.class)))
+                    .thenAnswer(invocation -> invocation.getArgument(0));
+
+            // 주문 요청 DTO 생성
+            OrderItemRequest itemRequest1 = OrderItemRequest.builder()
+                    .menuId(1L)
+                    .quantity(1)
+                    .build();
+            OrderItemRequest itemRequest2 = OrderItemRequest.builder()
+                    .menuId(2L)
+                    .quantity(2)
+                    .build();
+
+            OrderCreateRequest request = OrderCreateRequest.builder()
+                    .customerName("김춘식")
+                    .orderItems(List.of(itemRequest1, itemRequest2))
+                    .build();
+
+
+            // when
+            OrderResponse response = orderService.createOrder(request);
+
+            // then
+            assertThat(response).isNotNull();
+            assertThat(response.getOrderItems()).hasSize(2);
+            assertThat(response.getTotalPrice()).isEqualTo(13000);
+            assertThat(response.getStatus()).isEqualTo(OrderStatus.PENDING);
+
+            verify(menuRepository, times(1)).findById(1L);
+            verify(orderRepository, times(1)).save(any(Order.class));
+
+        }
+
+        @Test
+        @DisplayName("실패: 존재하지 않는 메뉴라면 주문이 실패해야 한다.")
+        void createOrder_WithNonExistentMenu_ThrowsException() {
+            // given
+            when(menuRepository.findById(999L))
+                    .thenReturn(Optional.empty());
+
+            // 주문 요청 DTO 생성
+            OrderItemRequest itemRequest = OrderItemRequest.builder()
+                    .menuId(999L)
+                    .quantity(2)
+                    .build();
+
+            OrderCreateRequest request = OrderCreateRequest.builder()
+                    .customerName("김춘식")
+                    .orderItems(List.of(itemRequest))
+                    .build();
+
+
+            // when & then
+            assertThatThrownBy(() -> orderService.createOrder(request))
+                    .isInstanceOf(IllegalArgumentException.class)
+                            .hasMessageContaining("존재하지 않는 메뉴");
+
+            verify(orderRepository, never()).save(any(Order.class));
+
+        }
+
+        @Test
+        @DisplayName("실패: 판매 불가능한 메뉴")
+        void createOrder_WithUnavailableMenu_ThrowsException() {
+            // Given
+            Menu unavailableMenu = Menu.builder()
+                    .name("품절 메뉴")
+                    .price(5000)
+                    .available(false)
+                    .build();
+
+            when(menuRepository.findById(1L)).thenReturn(Optional.of(unavailableMenu));
+
+            OrderCreateRequest request = OrderCreateRequest.builder()
+                    .customerName("홍길동")
+                    .orderItems(List.of(
+                            OrderItemRequest.builder().menuId(1L).quantity(1).build()
+                    ))
+                    .build();
+
+            // When & Then
+            assertThatThrownBy(() -> orderService.createOrder(request))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("주문할 수 없는 메뉴입니다.");
+
+            verify(orderRepository, never()).save(any(Order.class));
+        }
     }
+
+
 
 }
 
