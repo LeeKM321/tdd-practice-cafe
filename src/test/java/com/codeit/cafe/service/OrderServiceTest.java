@@ -200,6 +200,131 @@ public class OrderServiceTest {
         }
     }
 
+    @Nested
+    @DisplayName("주문 조회")
+    class getOrder {
+
+        @Test
+        @DisplayName("성공: 주문 ID로 조회")
+        void getOrder_WithValidId_Success() {
+            // Given
+            Order order = Order.builder()
+                    .customerName("홍길동")
+                    .build();
+            order.addOrderItem(americano, 2);
+
+            when(orderRepository.findByIdWithItems(1L)).thenReturn(order);
+
+            // When
+            OrderResponse response = orderService.getOrder(1L);
+
+            // Then
+            assertThat(response).isNotNull();
+            assertThat(response.getCustomerName()).isEqualTo("홍길동");
+            assertThat(response.getOrderItems()).hasSize(1);
+
+            verify(orderRepository, times(1)).findByIdWithItems(1L);
+        }
+
+        @Test
+        @DisplayName("실패: 존재하지 않는 주문")
+        void getOrder_WithNonExistentId_ThrowsException() {
+            // Given
+            when(orderRepository.findByIdWithItems(999L)).thenReturn(null);
+
+            // When & Then
+            assertThatThrownBy(() -> orderService.getOrder(999L))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("주문을 찾을 수 없습니다");
+        }
+
+        @Nested
+        @DisplayName("주문 상태 변경")
+        class UpdateOrderStatus {
+
+            @Test
+            @DisplayName("성공: PENDING -> CONFIRMED")
+            void updateOrderStatus_PendingToConfirmed_Success() {
+                // Given
+                Order order = Order.builder()
+                        .customerName("홍길동")
+                        .build();
+
+                when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+                when(orderRepository.save(any(Order.class)))
+                        .thenAnswer(invocation -> invocation.getArgument(0));
+
+                // When
+                OrderResponse response = orderService.updateOrderStatus(1L, OrderStatus.CONFIRMED);
+
+                // Then
+                assertThat(response.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+                verify(orderRepository, times(1)).save(order);
+            }
+
+            @Test
+            @DisplayName("성공: CONFIRMED -> PREPARING -> COMPLETED")
+            void updateOrderStatus_FullFlow_Success() {
+                // Given
+                Order order = Order.builder()
+                        .customerName("홍길동")
+                        .build();
+
+                when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+                when(orderRepository.save(any(Order.class)))
+                        .thenAnswer(invocation -> invocation.getArgument(0));
+
+                // When & Then
+                OrderResponse response1 = orderService.updateOrderStatus(1L, OrderStatus.CONFIRMED);
+                assertThat(response1.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+
+                OrderResponse response2 = orderService.updateOrderStatus(1L, OrderStatus.PREPARING);
+                assertThat(response2.getStatus()).isEqualTo(OrderStatus.PREPARING);
+
+                OrderResponse response3 = orderService.updateOrderStatus(1L, OrderStatus.COMPLETED);
+                assertThat(response3.getStatus()).isEqualTo(OrderStatus.COMPLETED);
+            }
+
+            @Test
+            @DisplayName("실패: 잘못된 상태 전환 (PENDING -> COMPLETED)")
+            void updateOrderStatus_InvalidTransition_ThrowsException() {
+                // Given
+                Order order = Order.builder()
+                        .customerName("홍길동")
+                        .build();
+
+                when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+
+                // When & Then
+                assertThatThrownBy(() -> orderService.updateOrderStatus(1L, OrderStatus.COMPLETED))
+                        .isInstanceOf(IllegalStateException.class)
+                        .hasMessageContaining("주문 상태를");
+
+                verify(orderRepository, never()).save(any(Order.class));
+            }
+
+            @Test
+            @DisplayName("실패: 완료된 주문의 상태 변경 시도")
+            void updateOrderStatus_CompletedOrder_ThrowsException() {
+                // Given
+                Order order = Order.builder()
+                        .customerName("홍길동")
+                        .build();
+                order.updateStatus(OrderStatus.CONFIRMED);
+                order.updateStatus(OrderStatus.PREPARING);
+                order.updateStatus(OrderStatus.COMPLETED);
+
+                when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+
+                // When & Then
+                assertThatThrownBy(() -> orderService.updateOrderStatus(1L, OrderStatus.PENDING))
+                        .isInstanceOf(IllegalStateException.class);
+            }
+        }
+
+
+    }
+
 
 
 }

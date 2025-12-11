@@ -3,6 +3,7 @@ package com.codeit.cafe.service;
 import com.codeit.cafe.domain.Menu;
 import com.codeit.cafe.domain.Order;
 import com.codeit.cafe.domain.OrderItem;
+import com.codeit.cafe.domain.OrderStatus;
 import com.codeit.cafe.dto.OrderCreateRequest;
 import com.codeit.cafe.dto.OrderItemRequest;
 import com.codeit.cafe.dto.OrderResponse;
@@ -44,6 +45,26 @@ public class OrderService {
             throw new IllegalStateException("주문할 수 없는 메뉴입니다." + menu.getName());
         }
         return menu;
+    }
+
+    public OrderResponse getOrder(long orderId) {
+        Order order = orderRepository.findByIdWithItems(orderId);
+
+        if (order == null) {
+            throw new IllegalArgumentException("주문을 찾을 수 없습니다." + orderId);
+        }
+
+        return OrderResponse.from(order);
+    }
+
+    public OrderResponse updateOrderStatus(long orderId, OrderStatus newStatus) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("주문을 찾을 수 없습니다." + orderId));
+
+        order.updateStatus(newStatus);
+        Order updated = orderRepository.save(order);
+
+        return OrderResponse.from(updated);
     }
 }
 

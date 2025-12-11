@@ -1,10 +1,7 @@
 package com.codeit.cafe.domain;
 
 import jakarta.persistence.*;
-import lombok.AccessLevel;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -58,6 +55,19 @@ public class Order {
 
         this.orderItems.add(orderItem);
         calculateTotalPrice();
+    }
+
+    public void updateStatus(OrderStatus newStatus) {
+        validateStatusTransition(newStatus);
+        this.status = newStatus;
+    }
+
+    private void validateStatusTransition(OrderStatus newStatus) {
+        if (!this.status.canTransitionTo(newStatus)) {
+            throw new IllegalStateException(
+                    String.format("주문 상태를 %s에서 %s로 변경할 수 없습니다.", this.status, newStatus)
+            );
+        }
     }
 
     private void calculateTotalPrice() {
